@@ -1,92 +1,110 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
-import { Check, ChevronsUpDown, Search } from "lucide-react"
+import { useWeatherContext } from "@/contexts/weather-context"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { useDebounce } from "@/hooks/use-debounce"
+import { Search, MapPin } from "lucide-react"
+import { debounce } from "@/utils/debounce"
 
-const cities = [
-  { value: "london", label: "London" },
-  { value: "new-york", label: "New York" },
-  { value: "tokyo", label: "Tokyo" },
-  { value: "sydney", label: "Sydney" },
-  { value: "cairo", label: "Cairo" },
-]
+const AVAILABLE_CITIES = ["London", "New York", "Tokyo", "Sydney", "Cairo"]
 
-interface CitySelectorProps {
-  currentCity: string
-  onCityChange: (city: string) => void
-}
+export function CitySelector() {
+  const { state, dispatch, fetchWeather } = useWeatherContext()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filteredCities, setFilteredCities] = useState(AVAILABLE_CITIES)
+  const [searchError, setSearchError] = useState("")
 
-export default function CitySelector({ currentCity, onCityChange }: CitySelectorProps) {
-  const [open, setOpen] = useState(false)
-  const [searchValue, setSearchValue] = useState("")
-  const debouncedSearchValue = useDebounce(searchValue, 300)
-  const [filteredCities, setFilteredCities] = useState(cities)
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  // Filter cities based on search input
-  useEffect(() => {
-    if (!debouncedSearchValue) {
-      setFilteredCities(cities)
-      setValidationError(null)
+  // Debounced search function
+  const debouncedSearch = debounce((term: string) => {
+    if (term.trim() === "") {
+      setFilteredCities(AVAILABLE_CITIES)
+      setSearchError("")
       return
     }
 
-    const filtered = cities.filter((city) => city.label.toLowerCase().includes(debouncedSearchValue.toLowerCase()))
-
-    setFilteredCities(filtered)
+    const filtered = AVAILABLE_CITIES.filter((city) => city.toLowerCase().includes(term.toLowerCase()))
 
     if (filtered.length === 0) {
-      setValidationError("No cities match your search")
+      setSearchError(`No cities found matching "${term}". Available cities: ${AVAILABLE_CITIES.join(", ")}`)
     } else {
-      setValidationError(null)
+      setSearchError("")
     }
-  }, [debouncedSearchValue])
 
-  const handleSelect = (city: string) => {
-    onCityChange(city)
-    setOpen(false)
+    setFilteredCities(filtered)
+  }, 300)
+
+  useEffect(() => {
+    debouncedSearch(searchTerm)
+  }, [searchTerm, debouncedSearch])
+
+  // Fetch weather data for initial city on mount
+  useEffect(() => {
+    fetchWeather(state.selectedCity)
+  }, [])
+
+  const handleCityChange = async (city: string) => {
+    if (city !== state.selectedCity) {
+      dispatch({ type: "CHANGE_CITY", payload: city })
+      await fetchWeather(city)
+    }
+  }
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (filteredCities.length === 1) {
+      handleCityChange(filteredCities[0])
+      setSearchTerm("")
+    } else if (filteredCities.length === 0) {
+      setSearchError("Please select a valid city from the available options")
+    }
   }
 
   return (
-    <div className="w-full md:w-[250px]">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-            {currentCity ? cities.find((city) => city.value === currentCity)?.label || "Select city" : "Select city"}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0">
-          <Command>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <CommandInput
-                placeholder="Search cities..."
-                className="pl-8"
-                value={searchValue}
-                onValueChange={setSearchValue}
-              />
-            </div>
-            {validationError && <p className="px-2 py-1 text-sm text-destructive">{validationError}</p>}
-            <CommandList>
-              <CommandEmpty>No cities found.</CommandEmpty>
-              <CommandGroup>
-                {filteredCities.map((city) => (
-                  <CommandItem key={city.value} value={city.value} onSelect={() => handleSelect(city.value)}>
-                    <Check className={cn("mr-2 h-4 w-4", currentCity === city.value ? "opacity-100" : "opacity-0")} />
-                    {city.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+      <div className="flex items-center gap-2">
+        <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <Select value={state.selectedCity} onValueChange={handleCityChange}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select a city" />
+          </SelectTrigger>
+          <SelectContent>
+            {AVAILABLE_CITIES.map((city) => (
+              <SelectItem key={city} value={city}>
+                {city}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <form onSubmit={handleSearchSubmit} className="flex gap-2">
+        <div className="relative">
+          <Input
+            type="text"
+            placeholder="Search cities..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-[200px] pr-10"
+          />
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        </div>
+        <Button type="submit" variant="outline" size="sm">
+          Search
+        </Button>
+      </form>
+
+      {searchError && <p className="text-sm text-red-600 dark:text-red-400 mt-1">{searchError}</p>}
+
+      {state.loading && (
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          Loading weather data...
+        </div>
+      )}
     </div>
   )
 }

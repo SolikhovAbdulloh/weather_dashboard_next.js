@@ -1,132 +1,117 @@
-"use client";
+"use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Thermometer, Droplets, Wind, Compass, Clock } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import { WeatherIcon } from "@/components/weather-icon";
+import { useWeatherContext } from "@/contexts/weather-context"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Thermometer, Droplets, Wind, Clock } from "lucide-react"
+import { WeatherIcon } from "@/components/weather-icon"
 
-interface WeatherDisplayProps {
-  currentWeather: {
-    dt: number;
-    temp: number;
-    feels_like: number;
-    humidity: number;
-    wind_speed: number;
-    wind_deg: number;
-    weather: Array<{
-      id: number;
-      main: string;
-      description: string;
-      icon: string;
-    }>;
-  };
-  unit: "metric" | "imperial";
-}
+export function WeatherDisplay() {
+  const { state, convertTemperature } = useWeatherContext()
 
-export default function WeatherDisplay({
-  currentWeather,
-  unit,
-}: WeatherDisplayProps) {
-  const tempUnit = unit === "metric" ? "°C" : "°F";
-  const windUnit = unit === "metric" ? "m/s" : "mph";
-
-  const getWindDirection = (degrees: number) => {
-    const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    const index = Math.round(degrees / 45) % 8;
-    return directions[index];
-  };
-
-  return (
-    <div className="animate-fadeInf ">
-      <Card>
-        <CardHeader className="pb-2 ">
-          <div className="flex justify-between items-center">
-            <CardTitle>Current Weather</CardTitle>
-            <Badge variant="outline">
-              <Clock className="h-3 w-3 mr-1" />
-              {formatDate(currentWeather.dt)}
-            </Badge>
-          </div>
+  if (state.loading) {
+    return (
+      <Card className="animate-pulse">
+        <CardHeader>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex flex-col items-center justify-center">
-              <div className="flex items-center">
-                <WeatherIcon
-                  iconCode={currentWeather.weather[0].icon}
-                  description={currentWeather.weather[0].description}
-                  size={64}
-                />
-                <div className="ml-4">
+          <div className="space-y-4">
+            <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (state.error) {
+    return (
+      <Card className="border-red-200 dark:border-red-800">
+        <CardContent className="pt-6">
+          <div className="text-center text-red-600 dark:text-red-400">
+            <p className="font-semibold">Error loading weather data</p>
+            <p className="text-sm mt-1">{state.error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!state.currentWeather) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>No weather data available</p>
+            <p className="text-sm mt-1">Please select a city to view weather information</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const { currentWeather } = state
+  const displayTemp =
+    state.unit === "fahrenheit" ? convertTemperature(currentWeather.temperature) : currentWeather.temperature
+
+  return (
+    <div className="transition-opacity duration-300 ease-in-out">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>{currentWeather.city}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              {new Date(currentWeather.timestamp).toLocaleTimeString()}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Main weather display */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <WeatherIcon icon={currentWeather.icon} size="large" />
+                <div>
                   <div className="text-4xl font-bold">
-                    {Math.round(currentWeather.temp)}
-                    {tempUnit}
+                    {Math.round(displayTemp)}°{state.unit === "celsius" ? "C" : "F"}
                   </div>
-                  <div className="text-muted-foreground">
-                    Feels like {Math.round(currentWeather.feels_like)}
-                    {tempUnit}
+                  <div className="text-lg text-gray-600 dark:text-gray-400 capitalize">
+                    {currentWeather.description}
                   </div>
-                </div>
-              </div>
-              <div className="mt-4 text-center">
-                <div className="text-lg capitalize font-medium">
-                  {currentWeather.weather[0].description}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <div className="bg-primary/10 p-2 rounded-full">
-                  <Thermometer className="h-5 w-5 text-primary" />
-                </div>
+            {/* Weather details */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <Thermometer className="h-5 w-5 text-red-500" />
                 <div>
-                  <div className="text-sm text-muted-foreground">
-                    Temperature
-                  </div>
-                  <div className="font-medium">
-                    {Math.round(currentWeather.temp)}
-                    {tempUnit}
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Feels like</div>
+                  <div className="font-semibold">
+                    {Math.round(displayTemp + 2)}°{state.unit === "celsius" ? "C" : "F"}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-500/10 p-2 rounded-full">
-                  <Droplets className="h-5 w-5 text-blue-500" />
-                </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <Droplets className="h-5 w-5 text-blue-500" />
                 <div>
-                  <div className="text-sm text-muted-foreground">Humidity</div>
-                  <div className="font-medium">{currentWeather.humidity}%</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Humidity</div>
+                  <div className="font-semibold">{currentWeather.humidity}%</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="bg-black p-2 rounded-full">
-                  <Wind className="h-5 w-5 text-amber-500" />
-                </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <Wind className="h-5 w-5 text-green-500" />
                 <div>
-                  <div className="text-sm text-muted-foreground">
-                    Wind Speed
-                  </div>
-                  <div className="font-medium">
-                    {currentWeather.wind_speed} {windUnit}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="bg-green-500/10 p-2 rounded-full">
-                  <Compass className="h-5 w-5 text-green-500" />
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">
-                    Wind Direction
-                  </div>
-                  <div className="font-medium">
-                    {getWindDirection(currentWeather.wind_deg)}
-                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Wind Speed</div>
+                  <div className="font-semibold">{currentWeather.windSpeed} km/h</div>
                 </div>
               </div>
             </div>
@@ -134,5 +119,5 @@ export default function WeatherDisplay({
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

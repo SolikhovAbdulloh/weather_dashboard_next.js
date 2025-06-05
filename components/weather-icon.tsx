@@ -1,64 +1,43 @@
-"use client";
+"use client"
 
-import {
-  Sun,
-  Cloud,
-  CloudRain,
-  CloudSnow,
-  CloudFog,
-  CloudLightning,
-  CloudDrizzle,
-  CloudSun,
-} from "lucide-react";
+import { Cloud, CloudRain, Sun, CloudSnow, Zap, Eye } from "lucide-react"
 
-interface WeatherIconProps {
-  iconCode: string;
-  description: string;
-  size?: number;
+type WeatherIconProps = {
+  icon: string
+  size?: "small" | "medium" | "large"
+  className?: string
 }
 
-export function WeatherIcon({
-  iconCode,
-  description,
-  size = 24,
-}: WeatherIconProps) {
-  // Map OpenWeatherMap icon codes to Lucide icons
-  const getIcon = () => {
-    switch (iconCode) {
-      case "01d":
-      case "01n":
-        return <Sun size={size} className="text-amber-900" />;
-      case "02d":
-      case "02n":
-        return <CloudSun size={size} className="text-[red]" />;
-      case "03d":
-      case "03n":
-      case "04d":
-      case "04n":
-        return <Cloud size={size} className="text-gray-800" />;
-      case "09d":
-      case "09n":
-        return <CloudDrizzle size={size} className="text-blue-400" />;
-      case "10d":
-      case "10n":
-        return <CloudRain size={size} className="text-blue-500" />;
-      case "11d":
-      case "11n":
-        return <CloudLightning size={size} className="text-[green]" />;
-      case "13d":
-      case "13n":
-        return <CloudSnow size={size} className="text-[red]" />;
-      case "50d":
-      case "50n":
-        return <CloudFog size={size} className="text-[red]" />;
-      default:
-        return <Sun size={size} className="text-amber-600" />;
-    }
-  };
+const iconMap = {
+  sunny: Sun,
+  "partly-cloudy": Cloud,
+  cloudy: Cloud,
+  rainy: CloudRain,
+  snowy: CloudSnow,
+  thunderstorm: Zap,
+  foggy: Eye,
+}
 
-  return (
-    <div className="flex items-center justify-center " title={description}>
-      {getIcon()}
-    </div>
-  );
+const sizeMap = {
+  small: "h-6 w-6",
+  medium: "h-8 w-8",
+  large: "h-12 w-12",
+}
+
+const colorMap = {
+  sunny: "text-yellow-500",
+  "partly-cloudy": "text-gray-500",
+  cloudy: "text-gray-600",
+  rainy: "text-blue-500",
+  snowy: "text-blue-200",
+  thunderstorm: "text-purple-500",
+  foggy: "text-gray-400",
+}
+
+export function WeatherIcon({ icon, size = "medium", className = "" }: WeatherIconProps) {
+  const IconComponent = iconMap[icon as keyof typeof iconMap] || Cloud
+  const sizeClass = sizeMap[size]
+  const colorClass = colorMap[icon as keyof typeof colorMap] || "text-gray-500"
+
+  return <IconComponent className={`${sizeClass} ${colorClass} ${className}`} />
 }

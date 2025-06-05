@@ -1,220 +1,167 @@
 "use client"
 
+import { useWeatherContext } from "@/contexts/weather-context"
+import { useWeatherData } from "@/hooks/use-weather-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatDate } from "@/lib/utils"
-import { useState } from "react"
+import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react"
 
-interface ForecastDay {
-  dt: number
-  temp: {
-    min: number
-    max: number
-    day: number
+export function DataVisualization() {
+  const { state, convertTemperature } = useWeatherContext()
+  const { getTemperatureStats } = useWeatherData()
+
+  if (state.loading) {
+    return (
+      <Card className="animate-pulse">
+        <CardHeader>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
-}
 
-interface DataVisualizationProps {
-  forecast: ForecastDay[]
-  unit: "metric" | "imperial"
-}
-
-export default function DataVisualization({ forecast, unit }: DataVisualizationProps) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-
-  const tempUnit = unit === "metric" ? "°C" : "°F"
-
-  // Find min and max temperatures for scaling
-  const allTemps = forecast.flatMap((day) => [day.temp.min, day.temp.max])
-  const minTemp = Math.min(...allTemps)
-  const maxTemp = Math.max(...allTemps)
-  const tempRange = maxTemp - minTemp
-
-  // Add padding to the range
-  const paddedMin = Math.floor(minTemp - tempRange * 0.1)
-  const paddedMax = Math.ceil(maxTemp + tempRange * 0.1)
-  const paddedRange = paddedMax - paddedMin
-
-  // Chart dimensions
-  const chartHeight = 200
-  const chartWidth = 100 // percentage
-
-  // Calculate position for a temperature value
-  const getYPosition = (temp: number) => {
-    return chartHeight - ((temp - paddedMin) / paddedRange) * chartHeight
+  if (state.error || state.forecast.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>No data available for visualization</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
+
+  const stats = getTemperatureStats(state.forecast)
+  const displayStats = {
+    min: state.unit === "fahrenheit" ? convertTemperature(stats.min) : stats.min,
+    max: state.unit === "fahrenheit" ? convertTemperature(stats.max) : stats.max,
+    average: state.unit === "fahrenheit" ? convertTemperature(stats.average) : stats.average,
+  }
+
+  // Prepare data for SVG chart
+  const chartData = state.forecast.map((day, index) => {
+    const temp = state.unit === "fahrenheit" ? convertTemperature(day.temperature) : day.temperature
+    return {
+      x: index * 120 + 60, // Spacing between points
+      y: 150 - ((temp - displayStats.min) / (displayStats.max - displayStats.min)) * 100, // Scale to chart height
+      temp,
+      day: new Date(day.date).toLocaleDateString("en-US", { weekday: "short" }),
+    }
+  })
+
+  // Create SVG path for temperature line
+  const pathData = chartData.reduce((path, point, index) => {
+    const command = index === 0 ? "M" : "L"
+    return `${path} ${command} ${point.x} ${point.y}`
+  }, "")
 
   return (
-    <Card className="bg-[black]">
-      <CardHeader>
-        <CardTitle>Temperature Trend</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="relative h-[250px]">
-          {/* Y-axis labels */}
-          <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-xs text-muted-foreground">
-            <div>
-              {paddedMax}
-              {tempUnit}
-            </div>
-            <div>
-              {Math.round((paddedMax + paddedMin) / 2)}
-              {tempUnit}
-            </div>
-            <div>
-              {paddedMin}
-              {tempUnit}
-            </div>
-          </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Temperature Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="w-full overflow-x-auto">
+            <svg width="600" height="200" className="w-full h-auto">
+              {/* Grid lines */}
+              <defs>
+                <pattern id="grid" width="60" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 60 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.2" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
 
-          {/* Chart area */}
-          <div className="absolute left-12 right-0 top-0 h-[200px]">
-            {/* Horizontal grid lines */}
-            <div className="absolute inset-0 flex flex-col justify-between">
-              <div className="border-t border-muted h-0"></div>
-              <div className="border-t border-dashed border-muted h-0"></div>
-              <div className="border-t border-muted h-0"></div>
-            </div>
-
-            {/* SVG chart */}
-            <svg width="100%" height={chartHeight} className="overflow-visible">
-              {/* Max temperature line */}
+              {/* Temperature line */}
               <path
-                d={`
-                  M ${0} ${getYPosition(forecast[0].temp.max)}
-                  ${forecast
-                    .map((day, i) => {
-                      const x = (i / (forecast.length - 1)) * 100 + "%"
-                      const y = getYPosition(day.temp.max)
-                      return `L ${x} ${y}`
-                    })
-                    .join(" ")}
-                `}
+                d={pathData}
                 fill="none"
-                strokeWidth="2"
+                stroke="#3b82f6"
+                strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
 
-              {/* Min temperature line */}
-              <path
-                d={`
-                  M ${0} ${getYPosition(forecast[0].temp.min)}
-                  ${forecast
-                    .map((day, i) => {
-                      const x = (i / (forecast.length - 1)) * 100 + "%"
-                      const y = getYPosition(day.temp.min)
-                      return `L ${x} ${y}`
-                    })
-                    .join(" ")}
-                `}
-                fill="none"
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="4 4"
-              />
-
-              {/* Area between min and max */}
-              <path
-                d={`
-                  M ${0} ${getYPosition(forecast[0].temp.max)}
-                  ${forecast
-                    .map((day, i) => {
-                      const x = (i / (forecast.length - 1)) * 100 + "%"
-                      const y = getYPosition(day.temp.max)
-                      return `L ${x} ${y}`
-                    })
-                    .join(" ")}
-                  L ${100}% ${getYPosition(forecast[forecast.length - 1].temp.min)}
-                  ${forecast
-                    .slice()
-                    .reverse()
-                    .map((day, i) => {
-                      const reverseIndex = forecast.length - 1 - i
-                      const x = (reverseIndex / (forecast.length - 1)) * 100 + "%"
-                      const y = getYPosition(day.temp.min)
-                      return `L ${x} ${y}`
-                    })
-                    .join(" ")}
-                  Z
-                `}
-                fillOpacity="0.1"
-              />
-
-              {/* Data points with hover effect */}
-              {forecast.map((day, i) => {
-                const x = (i / (forecast.length - 1)) * 100 + "%"
-                return (
-                  <g key={day.dt}>
-                    {/* Max temp point */}
-                    <circle
-                      cx={x}
-                      cy={getYPosition(day.temp.max)}
-                      r={hoveredIndex === i ? 5 : 3}
-                      fill="hsl(var(--primary))"
-                      stroke="hsl(var(--background))"
-                      strokeWidth="2"
-                      onMouseEnter={() => setHoveredIndex(i)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                      style={{ transition: "r 0.2s ease" }}
-                    />
-
-                    {/* Min temp point */}
-                    <circle
-                      cx={x}
-                      cy={getYPosition(day.temp.min)}
-                      r={hoveredIndex === i ? 5 : 3}
-                      fill="hsl(var(--muted-foreground))"
-                      stroke="hsl(var(--background))"
-                      strokeWidth="2"
-                      onMouseEnter={() => setHoveredIndex(i)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                      style={{ transition: "r 0.2s ease" }}
-                    />
-
-                    {/* Hover tooltip */}
-                    {hoveredIndex === i && (
-                      <g>
-                        <rect
-                          x={Number.parseFloat(x as string) - 40}
-                          y={getYPosition(day.temp.max) - 40}
-                          width="80"
-                          height="30"
-                          rx="4"
-                          fill="hsl(var(--background))"
-                          stroke="hsl(var(--border))"
-                          strokeWidth="1"
-                        />
-                        <text
-                          x={Number.parseFloat(x as string)}
-                          y={getYPosition(day.temp.max) - 20}
-                          textAnchor="middle"
-                          fontSize="12"
-                          fill="currentColor"
-                        >
-                          {Math.round(day.temp.max)}
-                          {tempUnit} / {Math.round(day.temp.min)}
-                          {tempUnit}
-                        </text>
-                      </g>
-                    )}
-                  </g>
-                )
-              })}
-            </svg>
-
-            {/* X-axis labels */}
-            <div className="absolute left-0 right-0 top-[200px] flex justify-between text-xs text-muted-foreground pt-2">
-              {forecast.map((day, i) => (
-                <div key={day.dt} style={{ width: `${100 / forecast.length}%`, textAlign: "center" }}>
-                  {formatDate(day.dt, true).split(" ")[0]}
-                </div>
+              {/* Data points */}
+              {chartData.map((point, index) => (
+                <g key={index}>
+                  <circle cx={point.x} cy={point.y} r="4" fill="#3b82f6" stroke="white" strokeWidth="2" />
+                  <text x={point.x} y={point.y - 15} textAnchor="middle" className="text-xs fill-current">
+                    {Math.round(point.temp)}°
+                  </text>
+                  <text x={point.x} y={190} textAnchor="middle" className="text-xs fill-current opacity-70">
+                    {point.day}
+                  </text>
+                </g>
               ))}
-            </div>
+            </svg>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <TrendingDown className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Minimum</div>
+                <div className="text-xl font-bold">
+                  {Math.round(displayStats.min)}°{state.unit === "celsius" ? "C" : "F"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Average</div>
+                <div className="text-xl font-bold">
+                  {Math.round(displayStats.average)}°{state.unit === "celsius" ? "C" : "F"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Maximum</div>
+                <div className="text-xl font-bold">
+                  {Math.round(displayStats.max)}°{state.unit === "celsius" ? "C" : "F"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }
